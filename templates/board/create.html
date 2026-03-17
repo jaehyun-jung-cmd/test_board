@@ -1,0 +1,83 @@
+{% extends 'base.html' %}
+{% block title %}게시글 작성{% endblock %}
+
+{% block content %}
+<div class="card shadow-sm">
+  <div class="card-header bg-white">
+    <h5 class="mb-0 font-weight-bold">✏️ 게시글 작성</h5>
+  </div>
+  <div class="card-body">
+    <form method="POST" id="post-form">
+      {% csrf_token %}
+
+      <div class="form-row mb-3">
+        <div class="col-md-4">
+          <label class="font-weight-bold">작성자 <span class="text-danger">*</span></label>
+          <input type="text" name="author"
+                 class="form-control {% if errors.author %}is-invalid{% endif %}"
+                 value="{{ form_data.author|default:'' }}"
+                 placeholder="이름을 입력하세요" required maxlength="50">
+          {% if errors.author %}
+            <div class="invalid-feedback">{{ errors.author }}</div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="font-weight-bold">제목 <span class="text-danger">*</span></label>
+        <input type="text" name="title"
+               class="form-control {% if errors.title %}is-invalid{% endif %}"
+               value="{{ form_data.title|default:'' }}"
+               placeholder="제목을 입력하세요" required maxlength="200">
+        {% if errors.title %}
+          <div class="invalid-feedback">{{ errors.title }}</div>
+        {% endif %}
+      </div>
+
+      <div class="form-group">
+        <label class="font-weight-bold">내용 <span class="text-danger">*</span></label>
+        <textarea id="content" name="content">{{ form_data.content|default:''|safe }}</textarea>
+        {% if errors.content %}
+          <div class="text-danger small mt-1">{{ errors.content }}</div>
+        {% endif %}
+      </div>
+
+      <div class="d-flex justify-content-between mt-4">
+        <a href="{% url 'board:post_list' %}" class="btn btn-secondary">← 취소</a>
+        <button type="submit" class="btn btn-primary px-4">작성 완료</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+$(document).ready(function () {
+  $('#content').summernote({
+    lang: 'ko-KR',
+    height: 350,
+    placeholder: '내용을 입력하세요...',
+    toolbar: [
+      ['style', ['style']],
+      ['font', ['bold', 'italic', 'underline', 'strikethrough', 'clear']],
+      ['fontsize', ['fontsize']],
+      ['color', ['color']],
+      ['para', ['ul', 'ol', 'paragraph']],
+      ['table', ['table']],
+      ['insert', ['link', 'picture', 'hr']],
+      ['view', ['fullscreen', 'codeview', 'help']],
+    ],
+  });
+
+  $('#post-form').on('submit', function () {
+    // Summernote 내용을 textarea에 동기화
+    var content = $('#content').summernote('code');
+    if (!content || content === '<p><br></p>') {
+      alert('내용을 입력해주세요.');
+      return false;
+    }
+  });
+});
+</script>
+{% endblock %}

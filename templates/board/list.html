@@ -1,0 +1,107 @@
+{% extends 'base.html' %}
+{% block title %}게시글 목록{% endblock %}
+
+{% block content %}
+<div class="card shadow-sm">
+  <div class="card-header d-flex justify-content-between align-items-center bg-white">
+    <h5 class="mb-0 font-weight-bold">게시글 목록</h5>
+    <a href="{% url 'board:post_create' %}" class="btn btn-primary btn-sm">✏️ 글쓰기</a>
+  </div>
+
+  <div class="card-body p-0">
+    <!-- 검색 -->
+    <form method="GET" class="p-3 border-bottom bg-light">
+      <div class="input-group input-group-sm">
+        <input type="text" name="search" class="form-control" placeholder="제목으로 검색" value="{{ search }}">
+        <div class="input-group-append">
+          <button class="btn btn-outline-secondary" type="submit">검색</button>
+          {% if search %}
+            <a href="{% url 'board:post_list' %}" class="btn btn-outline-secondary">초기화</a>
+          {% endif %}
+        </div>
+      </div>
+    </form>
+
+    <table class="table table-hover mb-0">
+      <thead class="thead-light">
+        <tr>
+          <th style="width:60px;" class="text-center">번호</th>
+          <th>제목</th>
+          <th style="width:100px;" class="text-center">작성자</th>
+          <th style="width:80px;" class="text-center">조회수</th>
+          <th style="width:110px;" class="text-center">작성일</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for post in page_obj %}
+        <tr>
+          <td class="text-center text-muted">{{ post.id }}</td>
+          <td>
+            <a href="{% url 'board:post_detail' post.id %}" class="text-dark">
+              {{ post.title }}
+            </a>
+            {% if post.comment_count > 0 %}
+              <span class="badge badge-info ml-1">{{ post.comment_count }}</span>
+            {% endif %}
+          </td>
+          <td class="text-center">{{ post.author }}</td>
+          <td class="text-center text-muted">{{ post.view_count }}</td>
+          <td class="text-center text-muted">{{ post.created_at|date:"Y-m-d" }}</td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="5" class="text-center py-5 text-muted">게시글이 없습니다.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 페이지네이션 -->
+  {% if page_obj.has_other_pages %}
+  <div class="card-footer bg-white">
+    <nav>
+      <ul class="pagination pagination-sm mb-0 justify-content-center">
+        {% if page_obj.has_previous %}
+          <li class="page-item">
+            <a class="page-link" href="?page=1{% if search %}&search={{ search }}{% endif %}">&laquo;</a>
+          </li>
+          <li class="page-item">
+            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if search %}&search={{ search }}{% endif %}">이전</a>
+          </li>
+        {% else %}
+          <li class="page-item disabled"><span class="page-link">&laquo;</span></li>
+          <li class="page-item disabled"><span class="page-link">이전</span></li>
+        {% endif %}
+
+        {% for num in page_obj.page_range %}
+          {% if page_obj.number == num %}
+            <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+          {% else %}
+            <li class="page-item">
+              <a class="page-link" href="?page={{ num }}{% if search %}&search={{ search }}{% endif %}">{{ num }}</a>
+            </li>
+          {% endif %}
+        {% endfor %}
+
+        {% if page_obj.has_next %}
+          <li class="page-item">
+            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if search %}&search={{ search }}{% endif %}">다음</a>
+          </li>
+          <li class="page-item">
+            <a class="page-link" href="?page={{ page_obj.num_pages }}{% if search %}&search={{ search }}{% endif %}">&raquo;</a>
+          </li>
+        {% else %}
+          <li class="page-item disabled"><span class="page-link">다음</span></li>
+          <li class="page-item disabled"><span class="page-link">&raquo;</span></li>
+        {% endif %}
+      </ul>
+    </nav>
+  </div>
+  {% endif %}
+
+  <div class="card-footer bg-white text-right text-muted small">
+    전체 {{ page_obj.total }}개 게시글
+  </div>
+</div>
+{% endblock %}

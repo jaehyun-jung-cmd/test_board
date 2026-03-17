@@ -1,0 +1,111 @@
+{% extends 'base.html' %}
+{% block title %}{{ post.title }}{% endblock %}
+
+{% block content %}
+<!-- 게시글 -->
+<div class="card shadow-sm mb-4">
+  <div class="card-header bg-white">
+    <h5 class="mb-1">{{ post.title }}</h5>
+    <small class="text-muted">
+      작성자: <strong>{{ post.author }}</strong> &nbsp;|&nbsp;
+      작성일: {{ post.created_at|date:"Y-m-d H:i" }} &nbsp;|&nbsp;
+      조회수: {{ post.view_count }}
+    </small>
+  </div>
+  <div class="card-body post-content">
+    {{ post.content|safe }}
+  </div>
+  <div class="card-footer bg-white d-flex justify-content-between align-items-center">
+    <a href="{% url 'board:post_list' %}" class="btn btn-secondary btn-sm">← 목록</a>
+    <div>
+      <a href="{% url 'board:post_edit' post.id %}" class="btn btn-warning btn-sm">수정</a>
+      <form method="POST" action="{% url 'board:post_delete' post.id %}" class="d-inline"
+            onsubmit="return confirm('정말 이 게시글을 삭제하시겠습니까?');">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger btn-sm">삭제</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- 댓글 목록 -->
+<div class="card shadow-sm">
+  <div class="card-header bg-white">
+    <h6 class="mb-0 font-weight-bold">댓글 {{ comments|length }}개</h6>
+  </div>
+
+  <div class="list-group list-group-flush">
+    {% for comment in comments %}
+    <div class="list-group-item" id="comment-{{ comment.id }}">
+      <div class="d-flex justify-content-between align-items-start">
+        <div>
+          <strong class="text-primary">{{ comment.author }}</strong>
+          <small class="text-muted ml-2">{{ comment.created_at|date:"Y-m-d H:i" }}</small>
+        </div>
+        <div class="btn-group btn-group-sm">
+          <a href="{% url 'board:comment_edit' post.id comment.id %}"
+             class="btn btn-outline-secondary btn-sm">수정</a>
+          <button type="button" class="btn btn-outline-danger btn-sm"
+                  onclick="toggleDeleteForm({{ comment.id }})">삭제</button>
+        </div>
+      </div>
+      <p class="mt-2 mb-2">{{ comment.content }}</p>
+
+      <!-- 삭제 비밀번호 폼 (기본 숨김) -->
+      <div id="delete-form-{{ comment.id }}" class="d-none mt-2">
+        <form method="POST" action="{% url 'board:comment_delete' post.id comment.id %}">
+          {% csrf_token %}
+          <div class="input-group input-group-sm">
+            <input type="password" name="password" class="form-control"
+                   placeholder="비밀번호를 입력하세요">
+            <div class="input-group-append">
+              <button type="submit" class="btn btn-danger">삭제 확인</button>
+              <button type="button" class="btn btn-secondary"
+                      onclick="toggleDeleteForm({{ comment.id }})">취소</button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+    {% empty %}
+    <div class="list-group-item text-center text-muted py-4">
+      첫 번째 댓글을 작성해보세요!
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- 댓글 작성 폼 -->
+  <div class="card-footer bg-light">
+    <h6 class="mb-3">댓글 작성</h6>
+    <form method="POST" action="{% url 'board:comment_create' post.id %}">
+      {% csrf_token %}
+      <div class="form-row mb-2">
+        <div class="col-md-4 mb-2">
+          <input type="text" name="author" class="form-control form-control-sm"
+                 placeholder="작성자 *" required maxlength="50">
+        </div>
+        <div class="col-md-4 mb-2">
+          <input type="password" name="password" class="form-control form-control-sm"
+                 placeholder="비밀번호 * (수정/삭제 시 필요)" required>
+        </div>
+      </div>
+      <div class="input-group">
+        <textarea name="content" class="form-control" rows="2"
+                  placeholder="댓글을 입력하세요." required></textarea>
+        <div class="input-group-append">
+          <button type="submit" class="btn btn-primary">작성</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function toggleDeleteForm(commentId) {
+  const form = document.getElementById('delete-form-' + commentId);
+  form.classList.toggle('d-none');
+}
+</script>
+{% endblock %}
