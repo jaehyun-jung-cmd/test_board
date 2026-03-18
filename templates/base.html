@@ -21,18 +21,23 @@
 <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm">
   <div class="container">
     <a class="navbar-brand font-weight-bold" href="{% url 'board:post_list' %}">📋 게시판</a>
+    <div class="ml-auto d-flex align-items-center">
+      {% if current_user %}
+        <span class="navbar-text text-white mr-3">{{ current_user.nickname }}님</span>
+        <form method="POST" action="{% url 'accounts:logout' %}" class="d-inline">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-outline-light btn-sm">로그아웃</button>
+        </form>
+      {% else %}
+        <a href="{% url 'accounts:login' %}" class="btn btn-outline-light btn-sm mr-2">로그인</a>
+        <a href="{% url 'accounts:signup' %}" class="btn btn-light btn-sm">회원가입</a>
+      {% endif %}
+    </div>
   </div>
 </nav>
 
 <div class="container mt-4 mb-5">
-  {% if messages %}
-    {% for message in messages %}
-      <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %} alert-dismissible fade show" role="alert">
-        {{ message }}
-        <button type="button" class="close" data-dismiss="alert"><span>&times;</span></button>
-      </div>
-    {% endfor %}
-  {% endif %}
+  {% include 'includes/alerts.html' %}
 
   {% block content %}{% endblock %}
 </div>

@@ -10,19 +10,6 @@
     <form method="POST" id="post-form">
       {% csrf_token %}
 
-      <div class="form-row mb-3">
-        <div class="col-md-4">
-          <label class="font-weight-bold">작성자 <span class="text-danger">*</span></label>
-          <input type="text" name="author"
-                 class="form-control {% if errors.author %}is-invalid{% endif %}"
-                 value="{{ post.author }}"
-                 required maxlength="50">
-          {% if errors.author %}
-            <div class="invalid-feedback">{{ errors.author }}</div>
-          {% endif %}
-        </div>
-      </div>
-
       <div class="form-group">
         <label class="font-weight-bold">제목 <span class="text-danger">*</span></label>
         <input type="text" name="title"

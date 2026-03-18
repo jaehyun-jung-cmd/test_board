@@ -23,7 +23,8 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def init_db():
     """모든 SQLAlchemy 모델을 기반으로 DB 테이블 생성"""
-    from . import models  # noqa: F401 - 모델 임포트로 Base에 테이블 등록
+    from . import models  # noqa: F401 - board 모델 등록
+    import accounts.models  # noqa: F401 - accounts 모델 등록 (users, password_reset_tokens 테이블)
     Base.metadata.create_all(bind=engine)
 
 
