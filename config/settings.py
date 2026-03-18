@@ -22,12 +22,14 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'django.contrib.messages',
     'board',
+    'accounts',
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'django.contrib.sessions.middleware.SessionMiddleware',  # 세션 처리
     'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',       # CSRF 보호
+    'django.middleware.csrf.CsrfViewMiddleware',             # CSRF 보호
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -44,6 +46,7 @@ TEMPLATES = [
                 'django.template.context_processors.debug',
                 'django.template.context_processors.request',
                 'django.contrib.messages.context_processors.messages',
+                'accounts.context_processors.current_user',  # 전역 로그인 사용자 주입
             ],
         },
     },
@@ -68,6 +71,32 @@ SQLALCHEMY_DATABASE_URL = (
 
 # 쿠키 기반 메시지 스토리지 - 세션/DB 없이 flash 메시지 동작
 MESSAGE_STORAGE = 'django.contrib.messages.storage.cookie.CookieStorage'
+
+# 세션 설정 - signed_cookies 백엔드 (DB 불필요)
+SESSION_ENGINE = 'django.contrib.sessions.backends.signed_cookies'
+SESSION_COOKIE_AGE = 60 * 60 * 3   # 3시간 유지
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False  # 브라우저 닫아도 3시간 유지
+SESSION_SAVE_EVERY_REQUEST = False       # 매 요청마다 세션 갱신 안 함
+
+# Argon2 비밀번호 해시 알고리즘 (업계 최고 권장)
+PASSWORD_HASHERS = [
+    'django.contrib.auth.hashers.Argon2PasswordHasher',
+    'django.contrib.auth.hashers.PBKDF2PasswordHasher',
+]
+
+# 이메일 설정 - 개발/운영 환경 분리
+if DEBUG:
+    # 로컬 개발: 이메일 내용을 터미널에 출력
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+else:
+    # 운영: Gmail SMTP 발송
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    EMAIL_HOST = 'smtp.gmail.com'
+    EMAIL_PORT = 587
+    EMAIL_USE_TLS = True
+    EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')
+    EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
+    DEFAULT_FROM_EMAIL = os.environ.get('EMAIL_HOST_USER')
 
 LANGUAGE_CODE = 'ko-kr'
 TIME_ZONE = 'Asia/Seoul'

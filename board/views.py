@@ -2,11 +2,11 @@ import math
 
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth.hashers import check_password, make_password
 from django.shortcuts import redirect, render
 
 from .database import get_db
 from .models import Comment, Post
+from accounts.decorators import login_required
 
 
 class PageObj:
@@ -122,7 +122,7 @@ def post_detail(request, post_id):
             .all()
         )
 
-        # 세션 종료 전 dict 변환
+        # 세션 종료 전 dict 변환 (user_id 포함 - 소유권 체크에 사용)
         post_data = {
             'id': post.id,
             'title': post.title,
@@ -131,6 +131,7 @@ def post_detail(request, post_id):
             'view_count': post.view_count,
             'created_at': post.created_at,
             'updated_at': post.updated_at,
+            'user_id': post.user_id,
         }
         comment_data = [
             {
@@ -138,6 +139,7 @@ def post_detail(request, post_id):
                 'content': c.content,
                 'author': c.author,
                 'created_at': c.created_at,
+                'user_id': c.user_id,  # 소유권 체크에 사용
             }
             for c in comments
         ]
@@ -148,69 +150,74 @@ def post_detail(request, post_id):
     })
 
 
+@login_required
 def post_create(request):
-    """게시글 작성"""
+    """게시글 작성 - 로그인 필요. 작성자는 로그인 사용자 닉네임 자동 설정."""
     if request.method == 'POST':
         title = request.POST.get('title', '').strip()
         content = request.POST.get('content', '').strip()
-        author = request.POST.get('author', '').strip()
+        # 작성자는 세션의 닉네임 자동 사용 (입력 불필요)
+        author = request.session.get('user_nickname', '')
 
-        # 입력값 유효성 검사
         errors = {}
         if not title:
             errors['title'] = '제목을 입력해주세요.'
         if not content or content in ('<p><br></p>', '<p></p>'):
-            # Summernote 빈 상태 체크
             errors['content'] = '내용을 입력해주세요.'
-        if not author:
-            errors['author'] = '작성자를 입력해주세요.'
 
         if not errors:
             with get_db() as db:
-                post = Post(title=title, content=content, author=author)
+                post = Post(
+                    title=title,
+                    content=content,
+                    author=author,
+                    user_id=request.session.get('user_id'),
+                )
                 db.add(post)
-                db.flush()  # ID 발급을 위해 flush
+                db.flush()
                 post_id = post.id
             messages.success(request, '게시글이 작성되었습니다.')
             return redirect('board:post_detail', post_id=post_id)
 
-        # 유효성 오류 시 입력값 유지하여 폼 재표시
         return render(request, 'board/create.html', {
             'errors': errors,
-            'form_data': {'title': title, 'author': author, 'content': content},
+            'form_data': {'title': title, 'content': content},
         })
 
     return render(request, 'board/create.html')
 
 
+@login_required
 def post_edit(request, post_id):
-    """게시글 수정"""
-    # 기존 데이터 로드 (GET/POST 공통)
+    """게시글 수정 - 로그인 + 본인 게시글만 수정 가능"""
     with get_db() as db:
         post = db.query(Post).filter(Post.id == post_id).first()
         if not post:
             messages.error(request, '게시글을 찾을 수 없습니다.')
             return redirect('board:post_list')
+
+        # 본인 게시글인지 확인
+        if post.user_id != request.session.get('user_id'):
+            messages.error(request, '수정 권한이 없습니다.')
+            return redirect('board:post_detail', post_id=post_id)
+
         post_data = {
             'id': post.id,
             'title': post.title,
             'content': post.content,
             'author': post.author,
+            'user_id': post.user_id,
         }
 
     if request.method == 'POST':
         title = request.POST.get('title', '').strip()
         content = request.POST.get('content', '').strip()
-        author = request.POST.get('author', '').strip()
 
-        # 입력값 유효성 검사
         errors = {}
         if not title:
             errors['title'] = '제목을 입력해주세요.'
         if not content or content in ('<p><br></p>', '<p></p>'):
             errors['content'] = '내용을 입력해주세요.'
-        if not author:
-            errors['author'] = '작성자를 입력해주세요.'
 
         if not errors:
             with get_db() as db:
@@ -218,56 +225,63 @@ def post_edit(request, post_id):
                 if post:
                     post.title = title
                     post.content = content
-                    post.author = author
             messages.success(request, '게시글이 수정되었습니다.')
             return redirect('board:post_detail', post_id=post_id)
 
-        # 유효성 오류 시 수정된 값으로 폼 재표시
         return render(request, 'board/edit.html', {
-            'post': {**post_data, 'title': title, 'content': content, 'author': author},
+            'post': {**post_data, 'title': title, 'content': content},
             'errors': errors,
         })
 
     return render(request, 'board/edit.html', {'post': post_data})
 
 
+@login_required
 def post_delete(request, post_id):
-    """게시글 삭제 - POST 요청만 처리 (detail 템플릿의 JS confirm 후 전송)"""
+    """게시글 삭제 - 로그인 + 본인 게시글만 삭제 가능"""
     if request.method == 'POST':
         with get_db() as db:
             post = db.query(Post).filter(Post.id == post_id).first()
-            if post:
-                db.delete(post)  # cascade 설정으로 댓글도 함께 삭제
+            if not post:
+                messages.error(request, '게시글을 찾을 수 없습니다.')
+                return redirect('board:post_list')
+
+            # 본인 게시글인지 확인
+            if post.user_id != request.session.get('user_id'):
+                messages.error(request, '삭제 권한이 없습니다.')
+                return redirect('board:post_detail', post_id=post_id)
+
+            db.delete(post)  # cascade 설정으로 댓글도 함께 삭제
         messages.success(request, '게시글이 삭제되었습니다.')
     return redirect('board:post_list')
 
 
+@login_required
 def comment_create(request, post_id):
-    """댓글 작성 - 비밀번호는 해시화하여 저장"""
+    """댓글 작성 - 로그인 필요. 작성자는 세션 닉네임 자동 설정."""
     if request.method == 'POST':
         content = request.POST.get('content', '').strip()
-        author = request.POST.get('author', '').strip()
-        password = request.POST.get('password', '').strip()
+        author = request.session.get('user_nickname', '')
 
-        if content and author and password:
+        if content:
             with get_db() as db:
                 comment = Comment(
                     post_id=post_id,
                     content=content,
                     author=author,
-                    password=make_password(password),  # bcrypt 해시로 저장
+                    user_id=request.session.get('user_id'),
                 )
                 db.add(comment)
             messages.success(request, '댓글이 작성되었습니다.')
         else:
-            messages.error(request, '모든 필드를 입력해주세요.')
+            messages.error(request, '댓글 내용을 입력해주세요.')
 
     return redirect('board:post_detail', post_id=post_id)
 
 
+@login_required
 def comment_edit(request, post_id, comment_id):
-    """댓글 수정 - 비밀번호 인증 후 수정 허용"""
-    # 댓글 존재 여부 확인 및 데이터 로드
+    """댓글 수정 - 로그인 + 본인 댓글만 수정 가능 (비밀번호 인증 제거)"""
     with get_db() as db:
         comment = db.query(Comment).filter(
             Comment.id == comment_id,
@@ -276,24 +290,21 @@ def comment_edit(request, post_id, comment_id):
         if not comment:
             messages.error(request, '댓글을 찾을 수 없습니다.')
             return redirect('board:post_detail', post_id=post_id)
+
+        # 본인 댓글인지 확인
+        if comment.user_id != request.session.get('user_id'):
+            messages.error(request, '수정 권한이 없습니다.')
+            return redirect('board:post_detail', post_id=post_id)
+
         comment_data = {
             'id': comment.id,
             'content': comment.content,
             'author': comment.author,
-            'password_hash': comment.password,  # 비밀번호 검증용 해시값
+            'user_id': comment.user_id,
         }
 
     if request.method == 'POST':
-        password = request.POST.get('password', '')
         content = request.POST.get('content', '').strip()
-
-        # 비밀번호 검증
-        if not check_password(password, comment_data['password_hash']):
-            return render(request, 'board/comment_edit.html', {
-                'comment': comment_data,
-                'post_id': post_id,
-                'error': '비밀번호가 일치하지 않습니다.',
-            })
 
         if not content:
             return render(request, 'board/comment_edit.html', {
@@ -302,10 +313,13 @@ def comment_edit(request, post_id, comment_id):
                 'error': '내용을 입력해주세요.',
             })
 
-        # 비밀번호 인증 통과 후 내용 업데이트
         with get_db() as db:
             comment = db.query(Comment).filter(Comment.id == comment_id).first()
             if comment:
+                # 재확인: 본인 댓글인지 (동시 요청 방지)
+                if comment.user_id != request.session.get('user_id'):
+                    messages.error(request, '수정 권한이 없습니다.')
+                    return redirect('board:post_detail', post_id=post_id)
                 comment.content = content
         messages.success(request, '댓글이 수정되었습니다.')
         return redirect('board:post_detail', post_id=post_id)
@@ -316,11 +330,10 @@ def comment_edit(request, post_id, comment_id):
     })
 
 
+@login_required
 def comment_delete(request, post_id, comment_id):
-    """댓글 삭제 - 비밀번호 인증 후 삭제 허용"""
+    """댓글 삭제 - 로그인 + 본인 댓글만 삭제 가능 (비밀번호 인증 제거)"""
     if request.method == 'POST':
-        password = request.POST.get('password', '')
-
         with get_db() as db:
             comment = db.query(Comment).filter(
                 Comment.id == comment_id,
@@ -330,9 +343,9 @@ def comment_delete(request, post_id, comment_id):
                 messages.error(request, '댓글을 찾을 수 없습니다.')
                 return redirect('board:post_detail', post_id=post_id)
 
-            # 비밀번호 검증 실패 시 삭제 거부
-            if not check_password(password, comment.password):
-                messages.error(request, '비밀번호가 일치하지 않습니다.')
+            # 본인 댓글인지 확인
+            if comment.user_id != request.session.get('user_id'):
+                messages.error(request, '삭제 권한이 없습니다.')
                 return redirect('board:post_detail', post_id=post_id)
 
             db.delete(comment)

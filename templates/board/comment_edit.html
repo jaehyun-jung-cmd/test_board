@@ -22,12 +22,6 @@
                       required>{{ comment.content }}</textarea>
           </div>
 
-          <div class="form-group">
-            <label class="font-weight-bold">비밀번호 <span class="text-danger">*</span></label>
-            <input type="password" name="password" class="form-control"
-                   placeholder="댓글 작성 시 입력한 비밀번호" required>
-          </div>
-
           <div class="d-flex justify-content-between">
             <a href="{% url 'board:post_detail' post_id %}" class="btn btn-secondary">← 취소</a>
             <button type="submit" class="btn btn-primary">수정 완료</button>

@@ -10,19 +10,6 @@
     <form method="POST" id="post-form">
       {% csrf_token %}
 
-      <div class="form-row mb-3">
-        <div class="col-md-4">
-          <label class="font-weight-bold">작성자 <span class="text-danger">*</span></label>
-          <input type="text" name="author"
-                 class="form-control {% if errors.author %}is-invalid{% endif %}"
-                 value="{{ form_data.author|default:'' }}"
-                 placeholder="이름을 입력하세요" required maxlength="50">
-          {% if errors.author %}
-            <div class="invalid-feedback">{{ errors.author }}</div>
-          {% endif %}
-        </div>
-      </div>
-
       <div class="form-group">
         <label class="font-weight-bold">제목 <span class="text-danger">*</span></label>
         <input type="text" name="title"
@@ -71,7 +58,6 @@ $(document).ready(function () {
   });
 
   $('#post-form').on('submit', function () {
-    // Summernote 내용을 textarea에 동기화
     var content = $('#content').summernote('code');
     if (!content || content === '<p><br></p>') {
       alert('내용을 입력해주세요.');
