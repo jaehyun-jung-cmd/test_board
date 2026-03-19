@@ -23,6 +23,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'board',
     'accounts',
+    'stocks',
 ]
 
 MIDDLEWARE = [
