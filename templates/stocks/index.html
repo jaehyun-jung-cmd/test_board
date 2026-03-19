@@ -1,0 +1,316 @@
+{% extends 'base.html' %}
+
+{% block title %}주식조회{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<style>
+  .stock-card { border-radius: 12px; }
+  .price-big  { font-size: 2rem; font-weight: 700; }
+  .change-up   { color: #e53935; }
+  .change-down { color: #1e88e5; }
+  #autocomplete-list .list-group-item { cursor: pointer; }
+  #chart-container { position: relative; height: 300px; }
+  .news-item { border-left: 3px solid #1976d2; padding-left: 10px; margin-bottom: 10px; }
+  .news-source { font-size: 0.78rem; color: #888; }
+  #spinner { display: none; }
+</style>
+{% endblock %}
+
+{% block content %}
+<h4 class="mb-4 font-weight-bold">📈 주식조회</h4>
+
+<!-- 검색 영역 -->
+<div class="card shadow-sm stock-card mb-4">
+  <div class="card-body">
+    <div class="row align-items-end">
+      <div class="col-md-3 mb-2">
+        <label class="font-weight-bold">시장</label>
+        <select id="market-select" class="form-control">
+          <option value="KR">🇰🇷 한국 (KRX)</option>
+          <option value="US">🇺🇸 미국 (NYSE/NASDAQ)</option>
+        </select>
+      </div>
+      <div class="col-md-7 mb-2 position-relative">
+        <label class="font-weight-bold">종목명 / 코드 / 티커</label>
+        <input id="search-input" type="text" class="form-control"
+               placeholder="예) 삼성전자, 005930, AAPL" autocomplete="off">
+        <div id="autocomplete-list" class="list-group position-absolute w-100"
+             style="z-index:1000; top:100%;"></div>
+      </div>
+      <div class="col-md-2 mb-2">
+        <label class="d-block">&nbsp;</label>
+        <button id="search-btn" class="btn btn-primary btn-block">조회</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 로딩 스피너 -->
+<div id="spinner" class="text-center my-4">
+  <div class="spinner-border text-primary" role="status">
+    <span class="sr-only">Loading...</span>
+  </div>
+</div>
+
+<!-- 에러 메시지 -->
+<div id="error-box" class="alert alert-danger d-none"></div>
+
+<!-- 결과 영역 -->
+<div id="result-area" class="d-none">
+
+  <!-- 시세 카드 -->
+  <div class="card shadow-sm stock-card mb-4">
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-start">
+        <div>
+          <h5 class="mb-0" id="r-name"></h5>
+          <small class="text-muted" id="r-code-market"></small>
+        </div>
+        <span id="r-currency-badge" class="badge badge-secondary align-self-center"></span>
+      </div>
+      <hr>
+      <div class="price-big" id="r-price"></div>
+      <div id="r-change" class="mt-1"></div>
+    </div>
+  </div>
+
+  <!-- 차트 -->
+  <div class="card shadow-sm stock-card mb-4">
+    <div class="card-header font-weight-bold">3개월 차트</div>
+    <div class="card-body">
+      <div id="chart-container">
+        <canvas id="price-chart"></canvas>
+      </div>
+      <p id="no-chart" class="text-muted text-center d-none">차트 데이터 없음</p>
+    </div>
+  </div>
+
+  <!-- 뉴스 -->
+  <div class="card shadow-sm stock-card mb-4">
+    <div class="card-header font-weight-bold">최신 뉴스</div>
+    <div class="card-body" id="news-list">
+      <p class="text-muted">뉴스 없음</p>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const marketSelect  = document.getElementById('market-select');
+const searchInput   = document.getElementById('search-input');
+const acList        = document.getElementById('autocomplete-list');
+const searchBtn     = document.getElementById('search-btn');
+const spinner       = document.getElementById('spinner');
+const errorBox      = document.getElementById('error-box');
+const resultArea    = document.getElementById('result-area');
+
+let chartInstance = null;
+let selectedCode  = '';   // 자동완성으로 선택된 코드
+let acIndex       = -1;   // 방향키 선택 인덱스
+
+// ── 자동완성 (KR만) ─────────────────────────────────────────────────────
+let acTimer = null;
+searchInput.addEventListener('input', () => {
+  selectedCode = '';
+  acIndex = -1;
+  clearTimeout(acTimer);
+  const q = searchInput.value.trim();
+  if (marketSelect.value !== 'KR' || q.length < 1) { acList.innerHTML = ''; return; }
+  acTimer = setTimeout(() => fetchAc(q), 250);
+});
+
+async function fetchAc(q) {
+  const resp = await fetch(`/stocks/api/search/?q=${encodeURIComponent(q)}`);
+  const data = await resp.json();
+  acList.innerHTML = '';
+  acIndex = -1;
+  data.results.slice(0, 8).forEach(item => {
+    const li = document.createElement('a');
+    li.className = 'list-group-item list-group-item-action py-1';
+    li.textContent = `${item.name} (${item.code})`;
+    li.dataset.code = item.code;
+    li.dataset.name = item.name;
+    li.addEventListener('mousedown', e => {
+      e.preventDefault();
+      selectAcItem(li);
+    });
+    acList.appendChild(li);
+  });
+}
+
+function selectAcItem(li) {
+  searchInput.value = li.dataset.name;
+  selectedCode = li.dataset.code;
+  acList.innerHTML = '';
+  acIndex = -1;
+}
+
+document.addEventListener('click', e => {
+  if (!acList.contains(e.target)) { acList.innerHTML = ''; acIndex = -1; }
+});
+
+// ── 조회 ────────────────────────────────────────────────────────────────
+searchBtn.addEventListener('click', doSearch);
+searchInput.addEventListener('keydown', e => {
+  const items = acList.querySelectorAll('.list-group-item');
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    acIndex = Math.min(acIndex + 1, items.length - 1);
+    updateAcHighlight(items);
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    acIndex = Math.max(acIndex - 1, -1);
+    updateAcHighlight(items);
+  } else if (e.key === 'Enter') {
+    if (acIndex >= 0 && items[acIndex]) {
+      selectAcItem(items[acIndex]);
+    } else {
+      doSearch();
+    }
+  } else if (e.key === 'Escape') {
+    acList.innerHTML = '';
+    acIndex = -1;
+  }
+});
+
+function updateAcHighlight(items) {
+  items.forEach((item, i) => item.classList.toggle('active', i === acIndex));
+}
+
+async function doSearch() {
+  const market = marketSelect.value;
+  const q      = searchInput.value.trim();
+  let   code   = selectedCode;
+
+  if (!q) { showError('종목을 입력하세요.'); return; }
+
+  errorBox.classList.add('d-none');
+  resultArea.classList.add('d-none');
+  spinner.style.display = 'block';
+
+  try {
+    // KR: 코드가 자동완성으로 선택되지 않았으면 검색 API로 코드 먼저 조회
+    if (market === 'KR' && !code) {
+      const searchResp = await fetch(`/stocks/api/search/?q=${encodeURIComponent(q)}`);
+      const searchData = await searchResp.json();
+      if (!searchData.results || searchData.results.length === 0) {
+        showError(`'${q}' 종목을 찾을 수 없습니다.`);
+        return;
+      }
+      code = searchData.results[0].code;
+    }
+
+    // US: 입력값을 티커로 사용
+    if (!code) code = q;
+
+    const resp = await fetch(
+      `/stocks/api/quote/?market=${market}&code=${encodeURIComponent(code)}`
+    );
+    const data = await resp.json();
+    spinner.style.display = 'none';
+
+    if (!resp.ok) { showError(data.error || '조회 실패'); return; }
+    renderResult(data);
+  } catch (err) {
+    spinner.style.display = 'none';
+    showError('네트워크 오류가 발생했습니다.');
+  }
+}
+
+function showError(msg) {
+  spinner.style.display = 'none';
+  errorBox.textContent = msg;
+  errorBox.classList.remove('d-none');
+}
+
+// ── 결과 렌더링 ──────────────────────────────────────────────────────────
+function renderResult(d) {
+  // 시세
+  document.getElementById('r-name').textContent = d.name;
+  document.getElementById('r-code-market').textContent = `${d.code} · ${d.market}`;
+  document.getElementById('r-currency-badge').textContent = d.currency;
+
+  const priceEl  = document.getElementById('r-price');
+  const changeEl = document.getElementById('r-change');
+  priceEl.textContent = formatPrice(d.price, d.currency);
+
+  const up = parseFloat(d.change_pct) >= 0;
+  changeEl.className   = up ? 'mt-1 change-up' : 'mt-1 change-down';
+  changeEl.textContent = `${up ? '▲' : '▼'} ${Math.abs(parseFloat(d.change_pct)).toFixed(2)}% (${d.change})`;
+
+  // 차트
+  renderChart(d.chart);
+
+  // 뉴스
+  renderNews(d.news);
+
+  resultArea.classList.remove('d-none');
+}
+
+function formatPrice(price, currency) {
+  const n = parseFloat(price);
+  if (isNaN(n)) return price;
+  return currency === 'KRW'
+    ? n.toLocaleString('ko-KR') + ' 원'
+    : '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2 });
+}
+
+function renderChart(chart) {
+  const noChart = document.getElementById('no-chart');
+  const container = document.getElementById('chart-container');
+
+  if (!chart || !chart.dates || chart.dates.length === 0) {
+    container.style.display = 'none';
+    noChart.classList.remove('d-none');
+    return;
+  }
+  container.style.display = 'block';
+  noChart.classList.add('d-none');
+
+  if (chartInstance) chartInstance.destroy();
+
+  const ctx = document.getElementById('price-chart').getContext('2d');
+  chartInstance = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: chart.dates,
+      datasets: [{
+        label: '종가',
+        data:  chart.prices,
+        borderColor: '#1976d2',
+        backgroundColor: 'rgba(25,118,210,0.08)',
+        borderWidth: 2,
+        pointRadius: 0,
+        tension: 0.3,
+        fill: true,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { maxTicksLimit: 6 } },
+        y: { ticks: { maxTicksLimit: 5 } }
+      }
+    }
+  });
+}
+
+function renderNews(news) {
+  const el = document.getElementById('news-list');
+  if (!news || news.length === 0) {
+    el.innerHTML = '<p class="text-muted">뉴스 없음</p>';
+    return;
+  }
+  el.innerHTML = news.map(n => `
+    <div class="news-item">
+      <a href="${n.url}" target="_blank" rel="noopener">${n.title}</a>
+      <div class="news-source">${n.source}</div>
+    </div>
+  `).join('');
+}
+</script>
+{% endblock %}

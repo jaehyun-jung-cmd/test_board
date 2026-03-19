@@ -21,17 +21,32 @@
 <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm">
   <div class="container">
     <a class="navbar-brand font-weight-bold" href="{% url 'board:post_list' %}">📋 게시판</a>
-    <div class="ml-auto d-flex align-items-center">
-      {% if current_user %}
-        <span class="navbar-text text-white mr-3">{{ current_user.nickname }}님</span>
-        <form method="POST" action="{% url 'accounts:logout' %}" class="d-inline">
-          {% csrf_token %}
-          <button type="submit" class="btn btn-outline-light btn-sm">로그아웃</button>
-        </form>
-      {% else %}
-        <a href="{% url 'accounts:login' %}" class="btn btn-outline-light btn-sm mr-2">로그인</a>
-        <a href="{% url 'accounts:signup' %}" class="btn btn-light btn-sm">회원가입</a>
-      {% endif %}
+    <button class="navbar-toggler" type="button" data-toggle="collapse"
+            data-target="#navbarNav" aria-controls="navbarNav"
+            aria-expanded="false" aria-label="메뉴 열기">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarNav">
+      <ul class="navbar-nav mr-auto">
+        <li class="nav-item">
+          <a class="nav-link" href="{% url 'board:post_list' %}">게시판</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="{% url 'stocks:index' %}">주식조회</a>
+        </li>
+      </ul>
+      <div class="d-flex align-items-center">
+        {% if current_user %}
+          <span class="navbar-text text-white mr-3">{{ current_user.nickname }}님</span>
+          <form method="POST" action="{% url 'accounts:logout' %}" class="d-inline">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline-light btn-sm">로그아웃</button>
+          </form>
+        {% else %}
+          <a href="{% url 'accounts:login' %}" class="btn btn-outline-light btn-sm mr-2">로그인</a>
+          <a href="{% url 'accounts:signup' %}" class="btn btn-light btn-sm">회원가입</a>
+        {% endif %}
+      </div>
     </div>
   </div>
 </nav>
